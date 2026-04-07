@@ -27,6 +27,8 @@ const SETUPS = ["CRT", "511 (CISD)"];
 const TFS   = ["1m","3m","5m","15m","30m","1h","4h","D","W"];
 const HTFS  = ["4h","D","W","M"];
 const DIRS  = ["Long","Short"];
+const SESSIONS = ["Asia", "London", "New York"];
+const DAYS     = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 // ─── STYLES ────────────────────────────────────────────────────────────────────
 const G = {
@@ -193,6 +195,8 @@ const EMPTY_FORM = {
   direction:"Long", setup:"CRT", htf:"D", entry_tf:"1h",
   entry_price:"", stop_loss:"", take_profit:"", exit_price:"", notes:"",
   before_image: "", after_image: "",
+  session: "New York",
+  day: new Intl.DateTimeFormat('en-US', { weekday: 'Long' }).format(new Date()),
 };
 
 function TradeForm({ onSaved, editTrade, onCancelEdit }) {
@@ -203,7 +207,20 @@ function TradeForm({ onSaved, editTrade, onCancelEdit }) {
 
   useEffect(() => { if (editTrade) setForm(editTrade); }, [editTrade]);
 
-  const F = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const F = (k, v) => {
+    setForm(p => {
+      const next = { ...p, [k]: v };
+      if (k === "date") {
+        try {
+          const d = new Date(v);
+          if (!isNaN(d.getTime())) {
+            next.day = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(d);
+          }
+        } catch (e) {}
+      }
+      return next;
+    });
+  };
 
   const preview = useMemo(() => {
     if (!form.entry_price || !form.stop_loss) return null;
@@ -236,6 +253,8 @@ function TradeForm({ onSaved, editTrade, onCancelEdit }) {
       notes: form.notes,
       before_image: form.before_image,
       after_image: form.after_image,
+      session: form.session,
+      day: form.day,
     };
     let error;
     if (editTrade) {
@@ -294,6 +313,8 @@ function TradeForm({ onSaved, editTrade, onCancelEdit }) {
         {field("Date / Time", "date", "datetime-local")}
         {field("Direction", "direction", "text", DIRS)}
         {field("Setup", "setup", "text", SETUPS)}
+        {field("Session", "session", "text", SESSIONS)}
+        {field("Day", "day", "text", DAYS)}
         {field("HTF", "htf", "text", HTFS)}
         {field("Entry TF", "entry_tf", "text", TFS)}
         {field("Entry Price", "entry_price", "number")}
@@ -379,7 +400,11 @@ function StatsDash({ trades }) {
 
     // By setup (all trades included in total count, but only closed trades in R)
     const bySetup = {};
+    const bySession = {};
+    const byDay = {};
+
     trades.forEach(t => {
+      // Setup
       if (!bySetup[t.setup]) bySetup[t.setup] = { wins:0, total:0, r:0, closed:0 };
       bySetup[t.setup].total++;
       if (t.outcome !== "Open") {
@@ -387,10 +412,30 @@ function StatsDash({ trades }) {
         bySetup[t.setup].r += t.r_multiple || 0;
         if (t.outcome === "Win") bySetup[t.setup].wins++;
       }
+
+      // Session
+      const sess = t.session || "Other";
+      if (!bySession[sess]) bySession[sess] = { wins:0, total:0, r:0, closed:0 };
+      bySession[sess].total++;
+      if (t.outcome !== "Open") {
+        bySession[sess].closed++;
+        bySession[sess].r += t.r_multiple || 0;
+        if (t.outcome === "Win") bySession[sess].wins++;
+      }
+
+      // Day
+      const dname = t.day || "Other";
+      if (!byDay[dname]) byDay[dname] = { wins:0, total:0, r:0, closed:0 };
+      byDay[dname].total++;
+      if (t.outcome !== "Open") {
+        byDay[dname].closed++;
+        byDay[dname].r += t.r_multiple || 0;
+        if (t.outcome === "Win") byDay[dname].wins++;
+      }
     });
 
     return { 
-      wr, lr, avgW, avgL, edge, totalR, bySetup, 
+      wr, lr, avgW, avgL, edge, totalR, bySetup, bySession, byDay,
       total: trades.length, 
       closedCount: closedTrades.length,
       wins: wins.length, 
@@ -450,6 +495,68 @@ function StatsDash({ trades }) {
           </tbody>
         </table>
       </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(300px, 1fr))", gap:14 }}>
+        {/* By Session */}
+        <div style={{ background:G.card, border:`1px solid ${G.border}`, borderRadius:6, overflow:"hidden" }}>
+          <div style={{ padding:"10px 14px", fontSize:9, color:G.muted, letterSpacing:3, borderBottom:`1px solid ${G.border}`, textTransform:"uppercase" }}>
+            Performance by Session
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ background:G.surface }}>
+                {["Session","Trades","Win%","Total R"].map(h => (
+                  <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontSize:9, color:G.muted, letterSpacing:2, fontWeight:400, borderBottom:`1px solid ${G.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats.bySession).map(([s, d]) => (
+                <tr key={s}>
+                  <td style={{ padding:"8px 14px", color:G.accent }}>{s}</td>
+                  <td style={{ padding:"8px 14px" }}>{d.total} <span style={{ color:G.muted, fontSize:10 }}>({d.closed} closed)</span></td>
+                  <td style={{ padding:"8px 14px", color: d.closed > 0 && d.wins/d.closed >= .5 ? G.green : G.red }}>
+                    {d.closed > 0 ? (d.wins/d.closed*100).toFixed(0) : 0}%
+                  </td>
+                  <td style={{ padding:"8px 14px", color: d.r >= 0 ? G.green : G.red }}>
+                    {d.r >= 0 ? "+" : ""}{fmt(d.r)}R
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* By Day */}
+        <div style={{ background:G.card, border:`1px solid ${G.border}`, borderRadius:6, overflow:"hidden" }}>
+          <div style={{ padding:"10px 14px", fontSize:9, color:G.muted, letterSpacing:3, borderBottom:`1px solid ${G.border}`, textTransform:"uppercase" }}>
+            Performance by Day
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr style={{ background:G.surface }}>
+                {["Day","Trades","Win%","Total R"].map(h => (
+                  <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontSize:9, color:G.muted, letterSpacing:2, fontWeight:400, borderBottom:`1px solid ${G.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats.byDay).map(([s, d]) => (
+                <tr key={s}>
+                  <td style={{ padding:"8px 14px", color:G.accent }}>{s}</td>
+                  <td style={{ padding:"8px 14px" }}>{d.total} <span style={{ color:G.muted, fontSize:10 }}>({d.closed} closed)</span></td>
+                  <td style={{ padding:"8px 14px", color: d.closed > 0 && d.wins/d.closed >= .5 ? G.green : G.red }}>
+                    {d.closed > 0 ? (d.wins/d.closed*100).toFixed(0) : 0}%
+                  </td>
+                  <td style={{ padding:"8px 14px", color: d.r >= 0 ? G.green : G.red }}>
+                    {d.r >= 0 ? "+" : ""}{fmt(d.r)}R
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -489,7 +596,7 @@ function TradeTable({ trades, onEdit, onDelete, filterSetup, setFilterSetup }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
               <tr style={{ background:G.surface }}>
-                {["Date","Pair","Dir","Setup","HTF","ETF","Entry","SL","TP","Exit","R","Outcome","Images",""].map(h => (
+                {["Date","Day","Pair","Dir","Setup","Session","HTF","ETF","Entry","SL","TP","Exit","R","Outcome","Images",""].map(h => (
                   <th key={h} style={{
                     padding:"9px 12px", textAlign:"left", fontSize:9, color:G.muted,
                     letterSpacing:2, fontWeight:400, borderBottom:`1px solid ${G.border}`,
@@ -500,7 +607,7 @@ function TradeTable({ trades, onEdit, onDelete, filterSetup, setFilterSetup }) {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={14} style={{ textAlign:"center", padding:24, color:G.muted, fontSize:11 }}>
+                <tr><td colSpan={16} style={{ textAlign:"center", padding:24, color:G.muted, fontSize:11 }}>
                   No trades found.
                 </td></tr>
               )}
@@ -512,9 +619,11 @@ function TradeTable({ trades, onEdit, onDelete, filterSetup, setFilterSetup }) {
                       {new Date(t.date).toLocaleDateString()}<br/>
                       <span style={{ fontSize:10, color:G.muted }}>{new Date(t.date).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>
                     </td>
+                    <td style={{ padding:"8px 12px", color:G.muted, textTransform:"capitalize" }}>{t.day || "—"}</td>
                     <td style={{ padding:"8px 12px", color:G.accent, fontWeight:600 }}>{t.pair}</td>
                     <td style={{ padding:"8px 12px", color: t.direction==="Long" ? G.green : G.red }}>{t.direction}</td>
                     <td style={{ padding:"8px 12px" }}>{t.setup}</td>
+                    <td style={{ padding:"8px 12px", color:G.muted }}>{t.session || "—"}</td>
                     <td style={{ padding:"8px 12px", color:G.muted }}>{t.htf}</td>
                     <td style={{ padding:"8px 12px", color:G.muted }}>{t.entry_tf}</td>
                     <td style={{ padding:"8px 12px" }}>{t.entry_price}</td>
