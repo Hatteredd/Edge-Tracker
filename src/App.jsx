@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 // ─── CONFIG ────────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://dqleytoljihbunqvhhje.supabase.co";
@@ -28,7 +28,7 @@ const TFS   = ["1m","3m","5m","15m","30m","1h","4h","D","W"];
 const HTFS  = ["1h","4h","D","W","M"];
 const DIRS  = ["Long","Short"];
 const SESSIONS = ["Asia", "London", "New York"];
-const DAYS     = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const DAYS     = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 // ─── STYLES ────────────────────────────────────────────────────────────────────
 const G = {
@@ -196,7 +196,7 @@ const EMPTY_FORM = {
   entry_price:"", stop_loss:"", take_profit:"", exit_price:"", notes:"",
   before_image: "", after_image: "",
   session: "New York",
-  day: new Intl.DateTimeFormat('en-US', { weekday: 'Long' }).format(new Date()),
+  day: new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date()),
 };
 
 function TradeForm({ onSaved, editTrade, onCancelEdit }) {
