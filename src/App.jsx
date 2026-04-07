@@ -25,7 +25,7 @@ const fmt = (n, d = 2) => isNaN(n) || n === null ? "—" : Number(n).toFixed(d);
 
 const SETUPS = ["CRT", "511 (CISD)"];
 const TFS   = ["1m","3m","5m","15m","30m","1h","4h","D","W"];
-const HTFS  = ["4h","D","W","M"];
+const HTFS  = ["1h","4h","D","W","M"];
 const DIRS  = ["Long","Short"];
 const SESSIONS = ["Asia", "London", "New York"];
 const DAYS     = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
