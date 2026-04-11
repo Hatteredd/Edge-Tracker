@@ -727,6 +727,133 @@ function ImportExport({ trades, onImported }) {
   );
 }
 
+// ─── MEXC CALCULATOR ──────────────────────────────────────────────────────────
+function MexcCalc() {
+  const [risk, setRisk] = useState(0.5);
+  const [entry, setEntry] = useState("");
+  const [sl, setSl] = useState("");
+
+  const data = useMemo(() => {
+    const e = parseFloat(entry);
+    const s = parseFloat(sl);
+    const r = parseFloat(risk);
+    if (!e || !s || !r || e === s) return null;
+
+    const dir = s < e ? "LONG ▲" : "SHORT ▼";
+    const slPct = Math.abs(e - s) / e;
+
+    const calcType = (fee) => {
+      const size = r / (slPct + fee);
+      const feeCost = size * fee;
+      const slLoss = size * slPct;
+      const total = slLoss + feeCost;
+      return { size, feeCost, slLoss, total };
+    };
+
+    const market = calcType(0.0016); // Taker/Taker
+    const limit = calcType(0.0011);  // Maker/Taker
+    const levels = [1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 50, 75, 100, 125];
+
+    return { dir, slPct, market, limit, levels };
+  }, [risk, entry, sl]);
+
+  const ResultCard = ({ title, icon, color, res }) => (
+    <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 8, padding: 20, flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ fontSize: 11, color: color, letterSpacing: 2, fontWeight: 600 }}>{title}</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 9, color: G.muted, textTransform: "uppercase", marginBottom: 4 }}>Position Size</div>
+          <div style={{ fontSize: 20, fontWeight: 600, color: G.text }}>${fmt(res.size)}</div>
+        </div>
+        <div style={{ height: 1, background: G.border }} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 9, color: G.muted, textTransform: "uppercase", marginBottom: 4 }}>Loss at SL</div>
+            <div style={{ fontSize: 13, color: G.text }}>${fmt(res.slLoss)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: G.muted, textTransform: "uppercase", marginBottom: 4 }}>Fee Cost</div>
+            <div style={{ fontSize: 13, color: G.text }}>${fmt(res.feeCost)}</div>
+          </div>
+        </div>
+        <div style={{ background: color + "11", padding: 10, borderRadius: 4, border: `1px dashed ${color}44` }}>
+          <div style={{ fontSize: 9, color: color, textTransform: "uppercase", marginBottom: 2 }}>Total Risk (Fee-Adjusted)</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: G.text }}>${fmt(res.total, 4)}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 8, padding: 20 }}>
+        <div style={{ fontSize: 11, color: G.accent, letterSpacing: 3, textTransform: "uppercase", marginBottom: 18 }}>
+          ⚡ MEXC Futures Calculator
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 9, color: G.muted, textTransform: "uppercase" }}>Risk Amount (USDT)</label>
+            <input type="number" value={risk} onChange={e => setRisk(e.target.value)} placeholder="0.50" />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 9, color: G.muted, textTransform: "uppercase" }}>Entry Price</label>
+            <input type="number" value={entry} onChange={e => setEntry(e.target.value)} placeholder="0.0000" />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 9, color: G.muted, textTransform: "uppercase" }}>Stop Loss Price</label>
+            <input type="number" value={sl} onChange={e => setSl(e.target.value)} placeholder="0.0000" />
+          </div>
+        </div>
+        {data && (
+          <div style={{ marginTop: 16, fontSize: 11, color: data.dir.includes("LONG") ? G.green : G.red, fontWeight: 600 }}>
+            DIRECTION: {data.dir} · SL: {(data.slPct * 100).toFixed(2)}%
+          </div>
+        )}
+      </div>
+
+      {data && (
+        <>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <ResultCard title="MARKET ENTRY (RUSH)" icon="⚡" color={G.accent} res={data.market} />
+            <ResultCard title="LIMIT ENTRY (PATIENT)" icon="🎯" color={G.blue} res={data.limit} />
+          </div>
+
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 8, overflow: "hidden" }}>
+            <div style={{ padding: "10px 14px", fontSize: 9, color: G.muted, letterSpacing: 3, borderBottom: `1px solid ${G.border}`, textTransform: "uppercase" }}>
+              Required Margin by Leverage
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: G.surface }}>
+                    <th style={{ padding: "10px 14px", textAlign: "left", color: G.muted, fontWeight: 400 }}>Leverage</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right", color: G.muted, fontWeight: 400 }}>Market Margin</th>
+                    <th style={{ padding: "10px 14px", textAlign: "right", color: G.muted, fontWeight: 400 }}>Limit Margin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.levels.map(lv => (
+                    <tr key={lv} style={{ borderBottom: `1px solid ${G.border}44`, background: (lv === 10 || lv === 20) ? G.accent + "08" : "transparent" }}>
+                      <td style={{ padding: "8px 14px", color: (lv === 10 || lv === 20) ? G.accent : G.textDim }}>
+                        {lv}x {(lv === 10 || lv === 20) && <span style={{ fontSize: 8, marginLeft: 4 }}>⭐ RECOMMENDED</span>}
+                      </td>
+                      <td style={{ padding: "8px 14px", textAlign: "right", color: G.text }}>${fmt(data.market.size / lv)}</td>
+                      <td style={{ padding: "8px 14px", textAlign: "right", color: G.text }}>${fmt(data.limit.size / lv)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN APP ──────────────────────────────────────────────────────────────────
 function App() {
   const [unlocked, setUnlocked] = useState(false);
@@ -734,7 +861,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [editTrade, setEditTrade] = useState(null);
   const [filterSetup, setFilterSetup] = useState("All");
-  const [tab, setTab] = useState("log"); // "log" | "stats"
+  const [tab, setTab] = useState("log"); // "log" | "stats" | "calc"
 
   useEffect(() => { injectStyles(); }, []);
 
@@ -795,7 +922,7 @@ function App() {
           </div>
           <div style={{ width:1, height:16, background:G.border }} />
           <div style={{ display:"flex", gap:0 }}>
-            {[["log","≡ Log"],["stats","◈ Stats"]].map(([k,l]) => (
+            {[["log","≡ Log"],["stats","◈ Stats"],["calc","⚡ Calc"]].map(([k,l]) => (
               <button key={k} onClick={() => setTab(k)} className={tab===k ? "tab-active" : ""} style={{
                 padding:"6px 16px", background:"transparent", border:"none",
                 borderBottom:`2px solid transparent`, fontSize:11, color:G.muted,
@@ -816,30 +943,36 @@ function App() {
       {/* Content */}
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"24px 20px", display:"flex", flexDirection:"column", gap:24 }}>
 
-        {/* Trade Form always visible */}
-        <TradeForm
-          onSaved={fetchTrades}
-          editTrade={editTrade}
-          onCancelEdit={() => setEditTrade(null)}
-        />
-
-        {tab === "stats" ? (
-          <StatsDash trades={trades} />
+        {tab === "calc" ? (
+          <MexcCalc />
         ) : (
           <>
-            <StatsDash trades={trades} />
-            {loading ? (
-              <div style={{ textAlign:"center", color:G.muted, fontSize:12, padding:24 }} className="pulse">
-                Loading trades…
-              </div>
+            {/* Trade Form always visible in log/stats */}
+            <TradeForm
+              onSaved={fetchTrades}
+              editTrade={editTrade}
+              onCancelEdit={() => setEditTrade(null)}
+            />
+
+            {tab === "stats" ? (
+              <StatsDash trades={trades} />
             ) : (
-              <TradeTable
-                trades={trades}
-                onEdit={t => { setEditTrade(t); window.scrollTo({ top:0, behavior:"smooth" }); }}
-                onDelete={deleteTrade}
-                filterSetup={filterSetup}
-                setFilterSetup={setFilterSetup}
-              />
+              <>
+                <StatsDash trades={trades} />
+                {loading ? (
+                  <div style={{ textAlign:"center", color:G.muted, fontSize:12, padding:24 }} className="pulse">
+                    Loading trades…
+                  </div>
+                ) : (
+                  <TradeTable
+                    trades={trades}
+                    onEdit={t => { setEditTrade(t); window.scrollTo({ top:0, behavior:"smooth" }); }}
+                    onDelete={deleteTrade}
+                    filterSetup={filterSetup}
+                    setFilterSetup={setFilterSetup}
+                  />
+                )}
+              </>
             )}
           </>
         )}
